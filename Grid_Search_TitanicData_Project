@@ -1,0 +1,246 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+
+
+
+train_data = pd.read_csv('data/titanic/train.csv')
+
+
+train_data.head()
+
+
+
+# eksik verili satırları sil
+
+train_data.dropna(axis=0, subset=['Survived'], inplace=True)
+
+
+
+train_data.head()
+
+
+
+# sonuç değişkeni
+
+y = train_data.Survived
+y
+
+
+
+# train datadan y'yi çıkar
+
+train_data.drop(['Survived'], axis=1, inplace=True)
+
+
+
+# İçinde Null değerler olan Age sütununu sil
+
+train_data.drop(['Age'], axis=1, inplace=True)
+
+
+
+train_data.head()
+
+
+
+# sadece numerik kolonları seç
+
+numeric_cols = [cname for cname in train_data.columns if train_data[cname].dtype in ['int64', 'float64']]
+
+
+
+X = train_data[numeric_cols].copy()
+
+
+
+X.head()
+
+
+
+print("Train datanın şekli: {} ve sonuç değişkenin şekli: {}".format(X.shape, y.shape))
+
+
+
+
+# ilk 5 train datasını göster
+
+pd.concat([X, y], axis=1).head()
+
+
+
+# datayı train-test split olarak ayıralım
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state= 42)
+
+
+
+
+# verilerin şekilleri
+
+print('X_train ölçüleri = ', X_train.shape)
+print('X_test ölçüleri = ', X_test.shape)
+print('y_train ölçüleri = ', y_train.shape)
+print('y_train ölçüleri = ', y_test.shape)
+
+
+
+
+# şimdi KNN ile çözelim
+# rasgele olarak K = 3 alalım
+
+neigh = KNeighborsClassifier(n_neighbors=3)
+
+neigh.fit(X_train, y_train)
+
+
+
+# tahmin yapalım
+
+y_pred = neigh.predict(X_test)
+
+print(y_pred)
+
+
+
+
+# tahmin olasıkları
+# 0.5'in üstü ise o sınıf seçilir
+
+y_predict_proba = neigh.predict_proba(X_test)
+
+print(y_predict_proba)
+
+
+
+
+# tahmin kaletisi için F1 scoruna bakalım
+
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
+
+
+
+# önce confusion matrix
+
+conf_mat = confusion_matrix(y_test, y_pred)
+
+print(conf_mat)
+
+
+
+
+# accuracy
+
+accuracy = accuracy_score(y_test, y_pred)
+
+print('Sklearn Accuracy Score: {:.4f}'.format(accuracy))
+
+
+
+# f1 score
+
+f1 = f1_score(y_test, y_pred)
+
+print('F1 Score: %{:.2f}'.format(f1 * 100))
+
+
+
+# parametre nesnemizi oluşturalım
+
+parameters = {
+    'n_neighbors': [1, 3, 5, 7, 9, 11, 13]
+}
+
+
+
+# GridSearchCV'yi oluşturalım
+
+gsc = GridSearchCV(estimator = KNeighborsClassifier(), 
+                   param_grid = parameters, 
+                   cv = 5, 
+                   verbose = 1, 
+                   scoring = 'accuracy')
+                   
+                   
+                   
+# şimdi çalıştıralım
+
+gsc.fit(X_train, y_train) 
+
+
+
+
+# Şimdi GridSearchCV'nin sonuçlarını gösterelim
+
+print(f'En iyi Hyperparameterlar: {gsc.best_params_}') 
+print(f'En iyi score: {gsc.best_score_}')
+
+
+
+
+# Detaylı sonucu 
+
+print('Detaylı GridSearchCV sonucu:')
+gsc_result = pd.DataFrame(gsc.cv_results_).sort_values('mean_test_score', ascending= False)
+
+print(gsc_result)
+
+
+
+
+# biraz daha sade yazalım
+
+print(gsc_result[['param_n_neighbors', 'mean_test_score', 'rank_test_score']])
+
+
+
+
+# En iyi hyperparameter değeri olan K = 11 için 1 kere çalıştıralım
+
+# 1 kere çalışsın
+neigh_final = KNeighborsClassifier(n_neighbors=11)
+
+neigh_final.fit(X_train, y_train)
+
+y_pred_final = neigh_final.predict(X_test)
+
+accuracy_final = accuracy_score(y_test, y_pred_final)
+print('Final Accuracy Score: {:.4f}'.format(accuracy_final))
+
+f1_final = f1_score(y_test, y_pred_final)
+print('F1 Score: %{:.2f}'.format(f1_final * 100))
+
+
+
+# 5 kere çalışsın 
+# 5 kere çalışınca bulacağımız ortala accuracy değeri, GridSearchCV'nin verdiğine yakın olacaktır
+# StratifiedKFold yaplım -> 5 fold için
+
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+score = cross_val_score(KNeighborsClassifier(), X_train, y_train, cv= kf, scoring="accuracy")
+score.mean()
+
+
+
+# GridSearchCV'yi oluşturalım
+# n_iter -> kaç adet parametre alacak
+
+rsc = RandomizedSearchCV(estimator = KNeighborsClassifier(), 
+                   param_distributions = parameters, 
+                   cv = 5, 
+                   n_iter = 3,
+                   verbose = 1, 
+                   scoring = 'accuracy')
+                   
+                   
+                   
+# şimdi çalıştıralım
+
+rsc.fit(X_train, y_train) 
+
+
+# Şimdi RandomizedSearchCV'nin sonuçlarını gösterelim
+
+print(f'En iyi Hyperparameterlar: {rsc.best_params_}') 
+print(f'En iyi score: {rsc.best_score_}')
